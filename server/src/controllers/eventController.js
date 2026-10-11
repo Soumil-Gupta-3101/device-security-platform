@@ -100,7 +100,10 @@ const ingestEvent = async (req, res) => {
 
     // Alert handling for medium and high severity
     if (severity === 'medium' || severity === 'high') {
-      const existingAlert = await Alert.findOne({ device: deviceId, status: 'open' });
+      const existingAlert = await Alert.findOne({
+        device: deviceId,
+        status: { $in: ['open', 'investigating'] }
+      });
       const reason = buildReason(triggeredRules);
 
       if (!existingAlert) {
@@ -116,9 +119,9 @@ const ingestEvent = async (req, res) => {
 
         if (existingSeverityLevel < newSeverityLevel) {
           existingAlert.severity = severity;
-          existingAlert.reason = reason;
-          await existingAlert.save();
         }
+        existingAlert.reason = reason;
+        await existingAlert.save();
       }
     }
 

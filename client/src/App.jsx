@@ -42,6 +42,14 @@ export default function App() {
               }
             />
             <Route
+              path="/alerts/:id"
+              element={
+                <ProtectedRoute>
+                  <AlertDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/alerts/:alertId"
               element={
                 <ProtectedRoute>
