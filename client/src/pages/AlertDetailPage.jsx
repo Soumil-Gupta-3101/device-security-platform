@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { getAlertById, updateAlertStatus, addAlertNote } from '../services/alertService'
 
 // Helper to format relative time
@@ -90,6 +91,7 @@ export default function AlertDetailPage() {
   const { id, alertId } = useParams()
   const currentId = id || alertId
   const { user, logout } = useAuth()
+  const { socket } = useSocket()
   const navigate = useNavigate()
 
   // Alert State
@@ -140,6 +142,23 @@ export default function AlertDetailPage() {
   useEffect(() => {
     fetchAlert()
   }, [fetchAlert])
+
+  // Live updates via socket
+  useEffect(() => {
+    if (!socket || !currentId) return
+
+    const handleAlertUpdated = (updatedAlert) => {
+      if (updatedAlert && updatedAlert._id === currentId) {
+        setAlert(updatedAlert)
+      }
+    }
+
+    socket.on('alert:updated', handleAlertUpdated)
+
+    return () => {
+      socket.off('alert:updated', handleAlertUpdated)
+    }
+  }, [socket, currentId])
 
   // Handle status update
   const handleStatusChange = async (newStatus) => {

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { SocketProvider } from './context/SocketContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SocketProvider>
         <div className="min-h-screen bg-slate-900 text-slate-100">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -59,6 +61,7 @@ export default function App() {
             />
           </Routes>
         </div>
+        </SocketProvider>
       </AuthProvider>
     </BrowserRouter>
   )

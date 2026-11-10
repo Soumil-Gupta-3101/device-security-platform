@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { getDeviceById, getRiskBreakdown, getDeviceEvents } from '../services/deviceService'
 import { getDeviceAlerts } from '../services/alertService'
 
@@ -36,6 +37,7 @@ const RULE_METADATA = {
 export default function DeviceDetailPage() {
   const { id } = useParams()
   const { user, logout } = useAuth()
+  const { socket } = useSocket()
   const navigate = useNavigate()
 
   // State
@@ -128,6 +130,78 @@ export default function DeviceDetailPage() {
   useEffect(() => {
     fetchAllData()
   }, [fetchAllData])
+
+  const refetchRiskBreakdown = useCallback(async () => {
+    if (!id) return
+    try {
+      const res = await getRiskBreakdown(id)
+      const rData = res?.data || res
+      if (rData) {
+        setRiskData(rData)
+      }
+    } catch (err) {
+      console.warn('Risk breakdown refetch failed:', err)
+    }
+  }, [id])
+
+  // Live updates via socket
+  useEffect(() => {
+    if (!socket || !id) return
+
+    const handleDeviceUpdated = (updatedDevice) => {
+      if (updatedDevice && updatedDevice._id === id) {
+        setDevice((prev) => ({ ...prev, ...updatedDevice }))
+        refetchRiskBreakdown()
+      }
+    }
+
+    const handleEventCreated = (newEvent) => {
+      if (!newEvent) return
+      const eventDeviceId =
+        typeof newEvent.device === 'object' && newEvent.device !== null
+          ? newEvent.device._id
+          : newEvent.device
+
+      if (eventDeviceId === id) {
+        setEvents((prev) => {
+          if (prev.some((e) => e._id === newEvent._id)) {
+            return prev
+          }
+          return [newEvent, ...prev]
+        })
+      }
+    }
+
+    const handleAlertChange = (alertItem) => {
+      if (!alertItem) return
+      const alertDeviceId =
+        typeof alertItem.device === 'object' && alertItem.device !== null
+          ? alertItem.device._id
+          : alertItem.device
+
+      if (alertDeviceId === id) {
+        setAlerts((prev) => {
+          const exists = prev.some((a) => a._id === alertItem._id)
+          if (exists) {
+            return prev.map((a) => (a._id === alertItem._id ? alertItem : a))
+          }
+          return [alertItem, ...prev]
+        })
+      }
+    }
+
+    socket.on('device:updated', handleDeviceUpdated)
+    socket.on('event:created', handleEventCreated)
+    socket.on('alert:created', handleAlertChange)
+    socket.on('alert:updated', handleAlertChange)
+
+    return () => {
+      socket.off('device:updated', handleDeviceUpdated)
+      socket.off('event:created', handleEventCreated)
+      socket.off('alert:created', handleAlertChange)
+      socket.off('alert:updated', handleAlertChange)
+    }
+  }, [socket, id, refetchRiskBreakdown])
 
   const handleLogout = () => {
     logout()

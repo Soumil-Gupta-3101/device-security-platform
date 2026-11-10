@@ -2,6 +2,7 @@ const Device = require('../models/Device');
 const DeviceEvent = require('../models/DeviceEvent');
 const Alert = require('../models/Alert');
 const { calculateRiskScore, getSeverityLabel } = require('../services/riskEngine');
+const { getIO, EVENTS } = require('../sockets');
 
 const SEVERITY_LEVELS = {
   low: 1,
@@ -83,6 +84,12 @@ const ingestEvent = async (req, res) => {
       metadata
     });
 
+    try {
+      getIO().emit(EVENTS.EVENT_CREATED, event);
+    } catch (socketError) {
+      console.error('Socket emit error (EVENT_CREATED):', socketError);
+    }
+
     await Device.findByIdAndUpdate(deviceId, { lastSeen: new Date() });
 
     // Recalculate risk score and update device riskScore and status if necessary
@@ -96,7 +103,15 @@ const ingestEvent = async (req, res) => {
     }
     device.riskScore = newScore;
 
-    await Device.findByIdAndUpdate(deviceId, deviceUpdates);
+    const updatedDevice = await Device.findByIdAndUpdate(deviceId, deviceUpdates, { new: true });
+
+    try {
+      if (updatedDevice) {
+        getIO().emit(EVENTS.DEVICE_UPDATED, updatedDevice);
+      }
+    } catch (socketError) {
+      console.error('Socket emit error (DEVICE_UPDATED):', socketError);
+    }
 
     // Alert handling for medium and high severity
     if (severity === 'medium' || severity === 'high') {
@@ -107,12 +122,19 @@ const ingestEvent = async (req, res) => {
       const reason = buildReason(triggeredRules);
 
       if (!existingAlert) {
-        await Alert.create({
+        const newAlert = await Alert.create({
           device: deviceId,
           severity,
           status: 'open',
           reason
         });
+
+        try {
+          await newAlert.populate('device', 'name _id');
+          getIO().emit(EVENTS.ALERT_CREATED, newAlert);
+        } catch (socketError) {
+          console.error('Socket emit error (ALERT_CREATED):', socketError);
+        }
       } else {
         const existingSeverityLevel = SEVERITY_LEVELS[existingAlert.severity] || 0;
         const newSeverityLevel = SEVERITY_LEVELS[severity] || 0;
@@ -122,6 +144,13 @@ const ingestEvent = async (req, res) => {
         }
         existingAlert.reason = reason;
         await existingAlert.save();
+
+        try {
+          await existingAlert.populate('device', 'name _id');
+          getIO().emit(EVENTS.ALERT_UPDATED, existingAlert);
+        } catch (socketError) {
+          console.error('Socket emit error (ALERT_UPDATED):', socketError);
+        }
       }
     }
 

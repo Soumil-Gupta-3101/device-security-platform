@@ -1,4 +1,5 @@
 const Alert = require('../models/Alert');
+const { getIO, EVENTS } = require('../sockets');
 
 const VALID_STATUSES = ['open', 'investigating', 'resolved'];
 
@@ -111,6 +112,17 @@ const updateAlertStatus = async (req, res) => {
       return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
     }
 
+    try {
+      const populatedAlert = await Alert.findById(alert._id)
+        .populate('device', 'name _id')
+        .populate('notes.author', 'name _id');
+      if (populatedAlert) {
+        getIO().emit(EVENTS.ALERT_UPDATED, populatedAlert);
+      }
+    } catch (socketError) {
+      console.error('Socket emit error (ALERT_UPDATED):', socketError);
+    }
+
     return res.status(200).json(alert);
   } catch (error) {
     console.error('Error updating alert status:', error);
@@ -157,6 +169,17 @@ const addAlertNote = async (req, res) => {
     });
 
     await alert.save();
+
+    try {
+      const populatedAlert = await Alert.findById(alert._id)
+        .populate('device', 'name _id')
+        .populate('notes.author', 'name _id');
+      if (populatedAlert) {
+        getIO().emit(EVENTS.ALERT_UPDATED, populatedAlert);
+      }
+    } catch (socketError) {
+      console.error('Socket emit error (ALERT_UPDATED):', socketError);
+    }
 
     return res.status(200).json(alert);
   } catch (error) {

@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { getDashboardSummary } from '../services/dashboardService'
 import { getDevices } from '../services/deviceService'
 import { getAlerts } from '../services/alertService'
 
 export default function DashboardPage() {
   const { user, logout } = useAuth()
+  const { socket, connected } = useSocket()
   const navigate = useNavigate()
+  const debounceTimerRef = useRef(null)
 
   // Loading states
   const [loadingSummary, setLoadingSummary] = useState(true)
@@ -38,9 +41,11 @@ export default function DashboardPage() {
     fetchAllData()
   }, [])
 
-  const fetchSummary = async () => {
-    setLoadingSummary(true)
-    setSummaryError(null)
+  const fetchSummary = async (silent = false) => {
+    if (!silent) {
+      setLoadingSummary(true)
+      setSummaryError(null)
+    }
     try {
       const data = await getDashboardSummary()
       if (data) {
@@ -63,11 +68,79 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('Failed to load dashboard summary:', err)
-      setSummaryError(err.response?.data?.message || err.message || 'Failed to load summary statistics')
+      if (!silent) {
+        setSummaryError(err.response?.data?.message || err.message || 'Failed to load summary statistics')
+      }
     } finally {
-      setLoadingSummary(false)
+      if (!silent) {
+        setLoadingSummary(false)
+      }
     }
   }
+
+  useEffect(() => {
+    if (!socket) return
+
+    const triggerSummaryRefresh = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        fetchSummary(true)
+      }, 1000)
+    }
+
+    const handleDeviceUpdated = (updatedDevice) => {
+      if (!updatedDevice || !updatedDevice._id) return
+
+      setDevices((prevDevices) => {
+        const exists = prevDevices.some((d) => d._id === updatedDevice._id)
+        if (exists) {
+          return prevDevices.map((d) => (d._id === updatedDevice._id ? updatedDevice : d))
+        }
+        return [updatedDevice, ...prevDevices]
+      })
+
+      triggerSummaryRefresh()
+    }
+
+    const handleAlertCreated = (newAlert) => {
+      if (!newAlert || !newAlert._id) return
+
+      setAlerts((prevAlerts) => {
+        const filtered = prevAlerts.filter((a) => a._id !== newAlert._id)
+        return [newAlert, ...filtered].slice(0, 10)
+      })
+
+      triggerSummaryRefresh()
+    }
+
+    const handleAlertUpdated = (updatedAlert) => {
+      if (!updatedAlert || !updatedAlert._id) return
+
+      setAlerts((prevAlerts) => {
+        if (updatedAlert.status !== 'open') {
+          return prevAlerts.filter((a) => a._id !== updatedAlert._id)
+        }
+        return prevAlerts.map((a) => (a._id === updatedAlert._id ? updatedAlert : a))
+      })
+
+      triggerSummaryRefresh()
+    }
+
+    socket.on('device:updated', handleDeviceUpdated)
+    socket.on('alert:created', handleAlertCreated)
+    socket.on('alert:updated', handleAlertUpdated)
+
+    return () => {
+      socket.off('device:updated', handleDeviceUpdated)
+      socket.off('alert:created', handleAlertCreated)
+      socket.off('alert:updated', handleAlertUpdated)
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [socket])
 
   const fetchDevicesData = async () => {
     setLoadingDevices(true)
@@ -212,13 +285,29 @@ export default function DashboardPage() {
                 <h1 className="text-base font-bold text-white uppercase tracking-tight font-mono">
                   Device Security &amp; <span className="text-cyan-400">Threat Monitoring</span>
                 </h1>
-                <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-500/30">
+                <div
+                  className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full ${
+                    connected
+                      ? 'bg-cyan-950/60 border border-cyan-500/30'
+                      : 'bg-amber-950/60 border border-amber-500/30'
+                  }`}
+                >
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+                    {connected && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    )}
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${
+                        connected ? 'bg-cyan-400' : 'bg-amber-400'
+                      }`}
+                    ></span>
                   </span>
-                  <span className="text-[10px] font-mono font-semibold tracking-wider text-cyan-300 uppercase">
-                    Live Active
+                  <span
+                    className={`text-[10px] font-mono font-semibold tracking-wider uppercase ${
+                      connected ? 'text-cyan-300' : 'text-amber-300'
+                    }`}
+                  >
+                    {connected ? 'Live Telemetry' : 'Offline / Reconnecting'}
                   </span>
                 </div>
               </div>

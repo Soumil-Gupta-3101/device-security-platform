@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { getAllAlerts } from '../services/alertService'
 
 // Helper to format relative time (e.g. "5 minutes ago", "1 hour ago", "Just now")
@@ -88,6 +89,7 @@ const getStatusBadge = (status) => {
 
 export default function AlertsPage() {
   const { user, logout } = useAuth()
+  const { socket } = useSocket()
   const navigate = useNavigate()
 
   // Filter state defaulting to "all"
@@ -143,6 +145,62 @@ export default function AlertsPage() {
   useEffect(() => {
     fetchAlerts()
   }, [fetchAlerts])
+
+  // Live updates via socket
+  useEffect(() => {
+    if (!socket) return
+
+    const matchesFilter = (alertItem, activeStatus, activeSeverity) => {
+      if (!alertItem) return false
+      const matchesStatus =
+        activeStatus === 'all' ||
+        alertItem.status?.toLowerCase() === activeStatus.toLowerCase()
+      const matchesSeverity =
+        activeSeverity === 'all' ||
+        alertItem.severity?.toLowerCase() === activeSeverity.toLowerCase()
+      return matchesStatus && matchesSeverity
+    }
+
+    const handleAlertCreated = (newAlert) => {
+      if (!newAlert || !newAlert._id) return
+      if (matchesFilter(newAlert, status, severity)) {
+        setAlerts((prev) => {
+          if (prev.some((a) => a._id === newAlert._id)) {
+            return prev.map((a) => (a._id === newAlert._id ? newAlert : a))
+          }
+          return [newAlert, ...prev]
+        })
+      }
+    }
+
+    const handleAlertUpdated = (updatedAlert) => {
+      if (!updatedAlert || !updatedAlert._id) return
+      const matches = matchesFilter(updatedAlert, status, severity)
+      setAlerts((prev) => {
+        const exists = prev.some((a) => a._id === updatedAlert._id)
+        if (matches) {
+          if (exists) {
+            return prev.map((a) => (a._id === updatedAlert._id ? updatedAlert : a))
+          } else {
+            return [updatedAlert, ...prev]
+          }
+        } else {
+          if (exists) {
+            return prev.filter((a) => a._id !== updatedAlert._id)
+          }
+          return prev
+        }
+      })
+    }
+
+    socket.on('alert:created', handleAlertCreated)
+    socket.on('alert:updated', handleAlertUpdated)
+
+    return () => {
+      socket.off('alert:created', handleAlertCreated)
+      socket.off('alert:updated', handleAlertUpdated)
+    }
+  }, [socket, status, severity])
 
   // Filtered by local search query
   const filteredAlerts = alerts.filter((alert) => {
