@@ -336,6 +336,22 @@ export default function AlertDetailPage() {
               >
                 Alerts Feed
               </Link>
+              {user?.role === 'admin' && (
+                <>
+                  <Link
+                    to="/audit-logs"
+                    className="px-3 py-1.5 rounded text-xs font-mono font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                  >
+                    Audit Log
+                  </Link>
+                  <Link
+                    to="/users"
+                    className="px-3 py-1.5 rounded text-xs font-mono font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                  >
+                    Users
+                  </Link>
+                </>
+              )}
             </nav>
 
             {user && (
@@ -409,42 +425,53 @@ export default function AlertDetailPage() {
               </p>
             </div>
 
-            {/* Status Change Control */}
-            <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl space-y-2 shrink-0">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
-                  Update Status
-                </p>
-                {statusUpdating && (
-                  <span className="text-[10px] font-mono text-cyan-400 animate-pulse">
-                    Saving...
-                  </span>
-                )}
+            {/* Status Change Control or Read-Only Hint */}
+            {user?.role === 'viewer' ? (
+              <div className="bg-slate-900/60 border border-slate-800/80 px-3.5 py-2.5 rounded-xl text-right shrink-0">
+                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold block">
+                  Status Control
+                </span>
+                <span className="text-xs font-mono text-slate-500 italic">
+                  Read-only mode (analyst or admin required)
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                {['open', 'investigating', 'resolved'].map((s) => {
-                  const isCurrent = alert.status?.toLowerCase() === s
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => handleStatusChange(s)}
-                      disabled={isCurrent || statusUpdating}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium capitalize transition-all ${
-                        isCurrent
-                          ? s === 'open'
-                            ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm shadow-cyan-500/30'
-                            : s === 'investigating'
-                            ? 'bg-amber-500 text-slate-950 font-bold shadow-sm shadow-amber-500/30'
-                            : 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/30'
-                          : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-50'
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  )
-                })}
+            ) : (
+              <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl space-y-2 shrink-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                    Update Status
+                  </p>
+                  {statusUpdating && (
+                    <span className="text-[10px] font-mono text-cyan-400 animate-pulse">
+                      Saving...
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {['open', 'investigating', 'resolved'].map((s) => {
+                    const isCurrent = alert.status?.toLowerCase() === s
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => handleStatusChange(s)}
+                        disabled={isCurrent || statusUpdating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium capitalize transition-all ${
+                          isCurrent
+                            ? s === 'open'
+                              ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm shadow-cyan-500/30'
+                              : s === 'investigating'
+                              ? 'bg-amber-500 text-slate-950 font-bold shadow-sm shadow-amber-500/30'
+                              : 'bg-emerald-500 text-slate-950 font-bold shadow-sm shadow-emerald-500/30'
+                            : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-50'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Alert Metadata Grid */}
@@ -568,42 +595,52 @@ export default function AlertDetailPage() {
             )}
           </div>
 
-          {/* Note Input Form */}
-          <form onSubmit={handleAddNote} className="space-y-3 pt-4 border-t border-slate-800/80">
-            <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider font-semibold">
-              Add Incident Note
-            </label>
-            <div className="space-y-2">
-              <textarea
-                rows={3}
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="Enter investigation observations, forensic analysis, or containment instructions..."
-                className="w-full p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-sans text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors resize-none"
-              />
-
-              {noteError && (
-                <p className="text-xs font-mono text-red-400">{noteError}</p>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={!noteText.trim() || submittingNote}
-                  className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-mono font-bold text-xs transition-colors flex items-center gap-2"
-                >
-                  {submittingNote ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      <span>Submitting...</span>
-                    </>
-                  ) : (
-                    <span>Add Note</span>
-                  )}
-                </button>
+          {/* Note Input Form or Read-Only Hint */}
+          {user?.role === 'viewer' ? (
+            <div className="pt-4 border-t border-slate-800/80">
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center">
+                <p className="text-xs font-mono text-slate-500 italic">
+                  Read-only mode: Adding incident investigation notes is restricted to analysts and administrators.
+                </p>
               </div>
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleAddNote} className="space-y-3 pt-4 border-t border-slate-800/80">
+              <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                Add Incident Note
+              </label>
+              <div className="space-y-2">
+                <textarea
+                  rows={3}
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Enter investigation observations, forensic analysis, or containment instructions..."
+                  className="w-full p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-sans text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors resize-none"
+                />
+
+                {noteError && (
+                  <p className="text-xs font-mono text-red-400">{noteError}</p>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!noteText.trim() || submittingNote}
+                    className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-mono font-bold text-xs transition-colors flex items-center gap-2"
+                  >
+                    {submittingNote ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <span>Add Note</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
         </div>
       </main>
     </div>

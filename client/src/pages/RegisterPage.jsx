@@ -6,7 +6,6 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('viewer')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -19,7 +18,7 @@ export default function RegisterPage() {
     setIsSubmitting(true)
 
     try {
-      await register(name, email, password, role)
+      await register(name, email, password)
       navigate('/dashboard')
     } catch (err) {
       const message =
@@ -144,31 +143,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="role"
-                className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-1.5"
-              >
-                Access Role
-              </label>
-              <div className="relative">
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full appearance-none bg-[#030914] border border-slate-700/80 rounded px-3 py-2 pr-10 text-sm text-slate-100 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-colors cursor-pointer"
-                >
-                  <option value="admin">Admin</option>
-                  <option value="analyst">Analyst</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
+
 
             <div>
               <label

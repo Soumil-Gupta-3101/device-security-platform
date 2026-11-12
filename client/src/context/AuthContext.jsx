@@ -49,12 +49,9 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const register = async (name, email, password, role) => {
+  const register = async (name, email, password) => {
     try {
       const payload = { name, email, password }
-      if (role) {
-        payload.role = role
-      }
 
       const response = await api.post(getAuthEndpoint('register'), payload)
       const { user: registeredUser, token: receivedToken } = response.data

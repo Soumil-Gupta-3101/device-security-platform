@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
+const { logAudit } = require('../services/auditService');
 
 /**
  * Registers a new user.
@@ -8,7 +9,7 @@ const generateToken = require('../utils/generateToken');
  */
 const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body || {};
+    const { name, email, password } = req.body || {};
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email, and password are required' });
@@ -26,15 +27,14 @@ const register = async (req, res) => {
     const userData = {
       name: typeof name === 'string' ? name.trim() : name,
       email: normalizedEmail,
-      passwordHash
+      passwordHash,
+      role: 'viewer'
     };
-
-    if (role) {
-      userData.role = role;
-    }
 
     const user = await User.create(userData);
     const token = generateToken(user._id, user.role);
+
+    await logAudit(user._id, 'user.registered', 'User', user._id);
 
     return res.status(201).json({
       user: {
@@ -75,6 +75,8 @@ const login = async (req, res) => {
     }
 
     const token = generateToken(user._id, user.role);
+
+    await logAudit(user._id, 'user.login', 'User', user._id);
 
     return res.status(200).json({
       user: {

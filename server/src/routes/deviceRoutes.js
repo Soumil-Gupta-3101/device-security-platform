@@ -8,19 +8,20 @@ const {
   getRiskBreakdown,
   getDeviceAlerts
 } = require('../controllers/deviceController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 router.use(protect);
 
-router.post('/', createDevice);
+router.post('/', authorize('admin'), createDevice);
 router.get('/', getAllDevices);
 router.get('/:id/risk-breakdown', getRiskBreakdown);
 router.get('/:id/alerts', getDeviceAlerts);
 router.get('/:id', getDeviceById);
-router.put('/:id', updateDevice);
-router.delete('/:id', deleteDevice);
+router.put('/:id', authorize('admin', 'analyst'), updateDevice);
+router.patch('/:id', authorize('admin', 'analyst'), updateDevice);
+router.delete('/:id', authorize('admin'), deleteDevice);
 
 module.exports = router;
 

@@ -1,6 +1,7 @@
 const Device = require('../models/Device');
 const Alert = require('../models/Alert');
 const { calculateRiskScore } = require('../services/riskEngine');
+const { logAudit } = require('../services/auditService');
 
 const VALID_STATUSES = ['trusted', 'unknown', 'suspicious', 'blocked'];
 const VALID_DEVICE_TYPES = ['laptop', 'mobile', 'iot', 'server'];
@@ -26,6 +27,8 @@ const createDevice = async (req, res) => {
     }
 
     const device = await Device.create(req.body);
+    const actingUserId = req.user?.id || req.user?._id;
+    await logAudit(actingUserId, 'device.created', 'Device', device._id);
     return res.status(201).json(device);
   } catch (error) {
     console.error('Error creating device:', error);
@@ -114,6 +117,9 @@ const updateDevice = async (req, res) => {
       return res.status(404).json({ message: 'Device not found' });
     }
 
+    const actingUserId = req.user?.id || req.user?._id;
+    await logAudit(actingUserId, 'device.updated', 'Device', device._id);
+
     return res.status(200).json(device);
   } catch (error) {
     console.error('Error updating device:', error);
@@ -133,6 +139,9 @@ const deleteDevice = async (req, res) => {
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });
     }
+
+    const actingUserId = req.user?.id || req.user?._id;
+    await logAudit(actingUserId, 'device.deleted', 'Device', device._id);
 
     return res.status(200).json({ message: 'Device deleted successfully' });
   } catch (error) {

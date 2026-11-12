@@ -5,7 +5,7 @@ const {
   updateAlertStatus,
   addAlertNote
 } = require('../controllers/alertController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -13,7 +13,8 @@ router.use(protect);
 
 router.get('/', getAllAlerts);
 router.get('/:id', getAlertById);
-router.patch('/:id/status', updateAlertStatus);
-router.post('/:id/notes', addAlertNote);
+router.patch('/:id/status', authorize('admin', 'analyst'), updateAlertStatus);
+router.put('/:id/status', authorize('admin', 'analyst'), updateAlertStatus);
+router.post('/:id/notes', authorize('admin', 'analyst'), addAlertNote);
 
 module.exports = router;

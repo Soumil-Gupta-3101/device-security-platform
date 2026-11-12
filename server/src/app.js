@@ -6,6 +6,8 @@ const authRoutes = require('./routes/authRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const userRoutes = require('./routes/userRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.use('/api/devices/:deviceId/events', eventRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 module.exports = app;
 

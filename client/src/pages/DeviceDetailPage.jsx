@@ -489,6 +489,22 @@ export default function DeviceDetailPage() {
               >
                 Alerts Feed
               </Link>
+              {user?.role === 'admin' && (
+                <>
+                  <Link
+                    to="/audit-logs"
+                    className="px-3 py-1.5 rounded text-xs font-mono font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                  >
+                    Audit Log
+                  </Link>
+                  <Link
+                    to="/users"
+                    className="px-3 py-1.5 rounded text-xs font-mono font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                  >
+                    Users
+                  </Link>
+                </>
+              )}
             </nav>
 
             {user && (

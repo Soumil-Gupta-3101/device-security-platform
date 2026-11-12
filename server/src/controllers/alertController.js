@@ -1,5 +1,6 @@
 const Alert = require('../models/Alert');
 const { getIO, EVENTS } = require('../sockets');
+const { logAudit } = require('../services/auditService');
 
 const VALID_STATUSES = ['open', 'investigating', 'resolved'];
 
@@ -96,11 +97,7 @@ const updateAlertStatus = async (req, res) => {
 
     let alert;
     try {
-      alert = await Alert.findByIdAndUpdate(
-        id,
-        { status },
-        { new: true, runValidators: true }
-      );
+      alert = await Alert.findById(id);
     } catch (err) {
       if (err.name === 'CastError') {
         return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
@@ -111,6 +108,16 @@ const updateAlertStatus = async (req, res) => {
     if (!alert) {
       return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
     }
+
+    const oldStatus = alert.status;
+    alert.status = status;
+    await alert.save();
+
+    const actingUserId = req.user?.id || req.user?._id;
+    await logAudit(actingUserId, 'alert.status_changed', 'Alert', alert._id, {
+      oldStatus,
+      newStatus: status
+    });
 
     try {
       const populatedAlert = await Alert.findById(alert._id)
@@ -169,6 +176,8 @@ const addAlertNote = async (req, res) => {
     });
 
     await alert.save();
+
+    await logAudit(authorId, 'alert.note_added', 'Alert', alert._id);
 
     try {
       const populatedAlert = await Alert.findById(alert._id)
