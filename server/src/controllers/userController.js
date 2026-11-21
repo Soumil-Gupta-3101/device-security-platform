@@ -8,7 +8,7 @@ const VALID_ROLES = ['admin', 'analyst', 'viewer'];
  * Retrieves all users, newest first, excluding passwordHash.
  * @route GET /api/users
  */
-const getAllUsers = async (req, res) => {
+const getAllUsers = async (req, res, next) => {
   try {
     const users = await User.find()
       .select('-passwordHash')
@@ -16,8 +16,7 @@ const getAllUsers = async (req, res) => {
 
     return res.status(200).json(users);
   } catch (error) {
-    console.error('Error fetching users:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -25,7 +24,7 @@ const getAllUsers = async (req, res) => {
  * Updates a user's role.
  * @route PATCH /api/users/:id/role
  */
-const updateUserRole = async (req, res) => {
+const updateUserRole = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { role } = req.body || {};
@@ -38,14 +37,6 @@ const updateUserRole = async (req, res) => {
       });
     }
 
-    // Handle malformed id format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        error: 'invalid user id',
-        message: 'Invalid user ID format'
-      });
-    }
-
     // Block an admin from changing their own role
     const currentUserId = req.user?.id || req.user?._id;
     if (String(currentUserId) === String(id)) {
@@ -55,18 +46,7 @@ const updateUserRole = async (req, res) => {
       });
     }
 
-    let user;
-    try {
-      user = await User.findById(id);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(400).json({
-          error: 'invalid user id',
-          message: 'Invalid user ID format'
-        });
-      }
-      throw err;
-    }
+    const user = await User.findById(id);
 
     // Handle nonexistent user
     if (!user) {
@@ -90,8 +70,7 @@ const updateUserRole = async (req, res) => {
 
     return res.status(200).json(userObj);
   } catch (error) {
-    console.error('Error updating user role:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -99,4 +78,3 @@ module.exports = {
   getAllUsers,
   updateUserRole
 };
-

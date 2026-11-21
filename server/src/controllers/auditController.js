@@ -1,5 +1,6 @@
-const mongoose = require('mongoose');
 const AuditLog = require('../models/AuditLog');
+
+const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 /**
  * Retrieves paginated audit logs with optional filtering by action and user.
@@ -7,7 +8,7 @@ const AuditLog = require('../models/AuditLog');
  *
  * @route GET /api/audit-logs
  */
-const getAuditLogs = async (req, res) => {
+const getAuditLogs = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, action, user } = req.query;
 
@@ -31,7 +32,7 @@ const getAuditLogs = async (req, res) => {
     }
 
     if (user !== undefined && user !== '') {
-      if (!mongoose.Types.ObjectId.isValid(user)) {
+      if (!OBJECT_ID_REGEX.test(user)) {
         return res.status(400).json({
           error: 'invalid user id',
           message: 'Invalid user ID format'
@@ -57,12 +58,10 @@ const getAuditLogs = async (req, res) => {
       totalPages: Math.ceil(total / limitNum)
     });
   } catch (error) {
-    console.error('Error fetching audit logs:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
 module.exports = {
   getAuditLogs
 };
-

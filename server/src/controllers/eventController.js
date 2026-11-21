@@ -49,7 +49,7 @@ const buildReason = (rules) => {
  *
  * @route POST /api/devices/:deviceId/events
  */
-const ingestEvent = async (req, res) => {
+const ingestEvent = async (req, res, next) => {
   try {
     const deviceId = req.params?.deviceId || req.params?.id;
     const { eventType, metadata } = req.body || {};
@@ -64,15 +64,7 @@ const ingestEvent = async (req, res) => {
       }
     }
 
-    let device;
-    try {
-      device = await Device.findById(deviceId);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ error: 'device not found' });
-      }
-      throw err;
-    }
+    const device = await Device.findById(deviceId);
 
     if (!device) {
       return res.status(404).json({ error: 'device not found' });
@@ -90,7 +82,14 @@ const ingestEvent = async (req, res) => {
       console.error('Socket emit error (EVENT_CREATED):', socketError);
     }
 
-    await Device.findByIdAndUpdate(deviceId, { lastSeen: new Date() });
+    const now = new Date();
+    const devicePresenceUpdates = { lastSeen: now };
+    if (!device.firstSeen) {
+      const eventTime = event.timestamp || event.createdAt || now;
+      devicePresenceUpdates.firstSeen = eventTime;
+      device.firstSeen = eventTime;
+    }
+    await Device.findByIdAndUpdate(deviceId, devicePresenceUpdates);
 
     // Recalculate risk score and update device riskScore and status if necessary
     const { score: newScore, triggeredRules } = await calculateRiskScore(deviceId);
@@ -156,8 +155,7 @@ const ingestEvent = async (req, res) => {
 
     return res.status(201).json(event);
   } catch (error) {
-    console.error('Error ingesting event:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -167,7 +165,7 @@ const ingestEvent = async (req, res) => {
  *
  * @route GET /api/devices/:deviceId/events
  */
-const getDeviceEvents = async (req, res) => {
+const getDeviceEvents = async (req, res, next) => {
   try {
     const deviceId = req.params?.deviceId || req.params?.id;
     const parsedLimit = parseInt(req.query?.limit, 10);
@@ -179,8 +177,7 @@ const getDeviceEvents = async (req, res) => {
 
     return res.status(200).json(events);
   } catch (error) {
-    console.error('Error fetching device events:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 

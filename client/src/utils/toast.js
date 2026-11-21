@@ -89,7 +89,66 @@ export function showForbiddenToast(customMessage) {
   container.appendChild(toast)
 }
 
+/**
+ * Displays a styled Session Expired notification toast.
+ * @param {string} [customMessage] - The error message to display.
+ */
+export function showSessionExpiredToast(customMessage) {
+  const container = getOrCreateContainer()
+  if (!container) return
+
+  const message = customMessage || 'Your session expired. Please log in again.'
+
+  const toast = document.createElement('div')
+  toast.className =
+    'pointer-events-auto bg-[#0b1324] border border-amber-500/80 rounded-lg p-4 shadow-2xl shadow-amber-950/60 text-slate-100 transition-all duration-300 transform translate-y-0 opacity-100 flex items-start gap-3 backdrop-blur-md'
+
+  toast.innerHTML = `
+    <div class="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-bold text-amber-400 uppercase tracking-wider text-[11px]">
+          Session Expired
+        </span>
+        <button class="toast-close text-slate-400 hover:text-white transition-colors p-0.5">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <p class="text-xs text-slate-300 mt-1 leading-relaxed font-sans">
+        ${message}
+      </p>
+    </div>
+  `
+
+  const removeToast = () => {
+    toast.classList.add('opacity-0', 'translate-y-[-8px]')
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast)
+      }
+    }, 300)
+  }
+
+  const closeBtn = toast.querySelector('.toast-close')
+  if (closeBtn) {
+    closeBtn.addEventListener('click', removeToast)
+  }
+
+  const timer = setTimeout(removeToast, 5000)
+  toast.addEventListener('mouseenter', () => clearTimeout(timer))
+  toast.addEventListener('mouseleave', () => setTimeout(removeToast, 2500))
+
+  container.appendChild(toast)
+}
+
 export default {
   showForbiddenToast,
+  showSessionExpiredToast,
 }
 

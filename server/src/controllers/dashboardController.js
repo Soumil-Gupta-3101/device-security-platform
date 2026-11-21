@@ -7,8 +7,9 @@ const Alert = require('../models/Alert');
  * @route GET /api/dashboard/summary
  * @param {import('express').Request} req
  * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
  */
-const getDashboardSummary = async (req, res) => {
+const getDashboardSummary = async (req, res, next) => {
   try {
     const [
       totalDevices,
@@ -63,11 +64,7 @@ const getDashboardSummary = async (req, res) => {
       avgRiskScore
     });
   } catch (error) {
-    console.error('Error fetching dashboard summary:', error);
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: 'Internal server error'
-    });
+    next(error);
   }
 };
 

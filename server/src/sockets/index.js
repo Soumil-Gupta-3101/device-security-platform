@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
 let io = null;
 
@@ -20,19 +21,30 @@ const initSocket = (httpServer) => {
     },
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth && socket.handshake.auth.token;
 
     if (!token) {
       return next(new Error('not authorized, no token'));
     }
 
+    let decoded;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded;
-      next();
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       return next(new Error('not authorized, invalid token'));
+    }
+
+    try {
+      const user = await User.findById(decoded.id).select('-passwordHash');
+      if (!user) {
+        return next(new Error('not authorized, user not found'));
+      }
+      socket.user = user;
+      socket.user.id = user._id.toString();
+      next();
+    } catch (error) {
+      return next(new Error('not authorized, user verification failed'));
     }
   });
 

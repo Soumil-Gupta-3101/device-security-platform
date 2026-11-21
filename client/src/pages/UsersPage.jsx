@@ -333,7 +333,7 @@ export default function UsersPage() {
           <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Role changes take effect after the user logs in again.</span>
+          <span>Role changes take effect immediately.</span>
         </div>
 
         {/* Page Title & Metrics Header */}
@@ -565,7 +565,7 @@ export default function UsersPage() {
               Showing <strong className="text-slate-200">{users.length}</strong> registered operators
             </span>
             <span className="text-slate-500">
-              Role changes take effect upon re-authentication
+              Role changes take effect immediately
             </span>
           </div>
         </section>

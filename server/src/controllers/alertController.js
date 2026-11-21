@@ -10,7 +10,7 @@ const VALID_STATUSES = ['open', 'investigating', 'resolved'];
  *
  * @route GET /api/alerts
  */
-const getAllAlerts = async (req, res) => {
+const getAllAlerts = async (req, res, next) => {
   try {
     const { status, severity, page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -40,8 +40,7 @@ const getAllAlerts = async (req, res) => {
       totalPages: Math.ceil(total / limitNum)
     });
   } catch (error) {
-    console.error('Error fetching alerts:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -51,21 +50,13 @@ const getAllAlerts = async (req, res) => {
  *
  * @route GET /api/alerts/:id
  */
-const getAlertById = async (req, res) => {
+const getAlertById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    let alert;
-    try {
-      alert = await Alert.findById(id)
-        .populate('device', 'name _id')
-        .populate('notes.author', 'name _id');
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
-      }
-      throw err;
-    }
+    const alert = await Alert.findById(id)
+      .populate('device', 'name _id')
+      .populate('notes.author', 'name _id');
 
     if (!alert) {
       return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
@@ -73,8 +64,7 @@ const getAlertById = async (req, res) => {
 
     return res.status(200).json(alert);
   } catch (error) {
-    console.error('Error fetching alert by ID:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -83,7 +73,7 @@ const getAlertById = async (req, res) => {
  *
  * @route PATCH /api/alerts/:id/status or PUT /api/alerts/:id/status
  */
-const updateAlertStatus = async (req, res) => {
+const updateAlertStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body || {};
@@ -95,15 +85,7 @@ const updateAlertStatus = async (req, res) => {
       });
     }
 
-    let alert;
-    try {
-      alert = await Alert.findById(id);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
-      }
-      throw err;
-    }
+    const alert = await Alert.findById(id);
 
     if (!alert) {
       return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
@@ -132,8 +114,7 @@ const updateAlertStatus = async (req, res) => {
 
     return res.status(200).json(alert);
   } catch (error) {
-    console.error('Error updating alert status:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -142,7 +123,7 @@ const updateAlertStatus = async (req, res) => {
  *
  * @route POST /api/alerts/:id/notes
  */
-const addAlertNote = async (req, res) => {
+const addAlertNote = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { text } = req.body || {};
@@ -154,15 +135,7 @@ const addAlertNote = async (req, res) => {
       });
     }
 
-    let alert;
-    try {
-      alert = await Alert.findById(id);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
-      }
-      throw err;
-    }
+    const alert = await Alert.findById(id);
 
     if (!alert) {
       return res.status(404).json({ error: 'Alert not found', message: 'Alert not found' });
@@ -192,8 +165,7 @@ const addAlertNote = async (req, res) => {
 
     return res.status(200).json(alert);
   } catch (error) {
-    console.error('Error adding note to alert:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 

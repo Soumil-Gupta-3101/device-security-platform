@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -10,6 +10,14 @@ export default function LoginPage() {
 
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const expiredMsg = sessionStorage.getItem('auth_message')
+    if (expiredMsg) {
+      sessionStorage.removeItem('auth_message')
+      setError(expiredMsg)
+    }
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

@@ -10,7 +10,7 @@ const VALID_DEVICE_TYPES = ['laptop', 'mobile', 'iot', 'server'];
  * Creates a new device.
  * @route POST /api/devices
  */
-const createDevice = async (req, res) => {
+const createDevice = async (req, res, next) => {
   try {
     const { name, ipAddress, status, deviceType } = req.body || {};
 
@@ -31,8 +31,7 @@ const createDevice = async (req, res) => {
     await logAudit(actingUserId, 'device.created', 'Device', device._id);
     return res.status(201).json(device);
   } catch (error) {
-    console.error('Error creating device:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -40,7 +39,7 @@ const createDevice = async (req, res) => {
  * Retrieves all devices with optional status filtering and pagination.
  * @route GET /api/devices
  */
-const getAllDevices = async (req, res) => {
+const getAllDevices = async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -66,8 +65,7 @@ const getAllDevices = async (req, res) => {
       totalPages: Math.ceil(total / limitNum)
     });
   } catch (error) {
-    console.error('Error fetching devices:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -75,7 +73,7 @@ const getAllDevices = async (req, res) => {
  * Retrieves a single device by ID.
  * @route GET /api/devices/:id
  */
-const getDeviceById = async (req, res) => {
+const getDeviceById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const device = await Device.findById(id);
@@ -86,8 +84,7 @@ const getDeviceById = async (req, res) => {
 
     return res.status(200).json(device);
   } catch (error) {
-    console.error('Error fetching device by ID:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -95,7 +92,7 @@ const getDeviceById = async (req, res) => {
  * Updates a device by ID.
  * @route PUT /api/devices/:id
  */
-const updateDevice = async (req, res) => {
+const updateDevice = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status, deviceType } = req.body || {};
@@ -122,8 +119,7 @@ const updateDevice = async (req, res) => {
 
     return res.status(200).json(device);
   } catch (error) {
-    console.error('Error updating device:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -131,7 +127,7 @@ const updateDevice = async (req, res) => {
  * Deletes a device by ID.
  * @route DELETE /api/devices/:id
  */
-const deleteDevice = async (req, res) => {
+const deleteDevice = async (req, res, next) => {
   try {
     const { id } = req.params;
     const device = await Device.findByIdAndDelete(id);
@@ -145,8 +141,7 @@ const deleteDevice = async (req, res) => {
 
     return res.status(200).json({ message: 'Device deleted successfully' });
   } catch (error) {
-    console.error('Error deleting device:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -155,19 +150,10 @@ const deleteDevice = async (req, res) => {
  * Read-only, does not persist changes to the database.
  * @route GET /api/devices/:id/risk-breakdown
  */
-const getRiskBreakdown = async (req, res) => {
+const getRiskBreakdown = async (req, res, next) => {
   try {
     const { id: deviceId } = req.params;
-
-    let device;
-    try {
-      device = await Device.findById(deviceId);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ message: 'Device not found' });
-      }
-      throw err;
-    }
+    const device = await Device.findById(deviceId);
 
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });
@@ -181,8 +167,7 @@ const getRiskBreakdown = async (req, res) => {
       triggeredRules
     });
   } catch (error) {
-    console.error('Error getting risk breakdown:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -190,19 +175,10 @@ const getRiskBreakdown = async (req, res) => {
  * Retrieves all alerts for a specific device, sorted newest-first.
  * @route GET /api/devices/:id/alerts
  */
-const getDeviceAlerts = async (req, res) => {
+const getDeviceAlerts = async (req, res, next) => {
   try {
     const { id: deviceId } = req.params;
-
-    let device;
-    try {
-      device = await Device.findById(deviceId);
-    } catch (err) {
-      if (err.name === 'CastError') {
-        return res.status(404).json({ error: 'Device not found', message: 'Device not found' });
-      }
-      throw err;
-    }
+    const device = await Device.findById(deviceId);
 
     if (!device) {
       return res.status(404).json({ error: 'Device not found', message: 'Device not found' });
@@ -212,8 +188,7 @@ const getDeviceAlerts = async (req, res) => {
 
     return res.status(200).json(alerts);
   } catch (error) {
-    console.error('Error fetching device alerts:', error);
-    return res.status(500).json({ error: 'Internal server error', message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -226,4 +201,3 @@ module.exports = {
   getRiskBreakdown,
   getDeviceAlerts
 };
-

@@ -7,7 +7,7 @@ const { logAudit } = require('../services/auditService');
  * Registers a new user.
  * @route POST /api/auth/register
  */
-const register = async (req, res) => {
+const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body || {};
 
@@ -46,8 +46,7 @@ const register = async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('Error during registration:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
   }
 };
 
@@ -55,7 +54,7 @@ const register = async (req, res) => {
  * Authenticates an existing user and returns a token.
  * @route POST /api/auth/login
  */
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
 
@@ -88,12 +87,36 @@ const login = async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('Error during login:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    next(error);
+  }
+};
+
+/**
+ * Retrieves the currently authenticated user's profile.
+ * @route GET /api/auth/me
+ */
+const getMe = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = await User.findById(userId).select('-passwordHash');
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found', message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
   register,
-  login
+  login,
+  getMe
 };

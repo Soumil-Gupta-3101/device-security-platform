@@ -36,6 +36,9 @@ const deviceSchema = new mongoose.Schema(
       max: [100, 'Risk score cannot exceed 100'],
       index: true
     },
+    firstSeen: {
+      type: Date
+    },
     lastSeen: {
       type: Date
     },
