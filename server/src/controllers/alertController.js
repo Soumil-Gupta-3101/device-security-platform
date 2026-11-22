@@ -1,6 +1,8 @@
 const Alert = require('../models/Alert');
+const Device = require('../models/Device');
 const { getIO, EVENTS } = require('../sockets');
 const { logAudit } = require('../services/auditService');
+const { enrichDeviceWithAlerts } = require('../services/deviceAlertService');
 
 const VALID_STATUSES = ['open', 'investigating', 'resolved'];
 
@@ -108,6 +110,13 @@ const updateAlertStatus = async (req, res, next) => {
       if (populatedAlert) {
         getIO().emit(EVENTS.ALERT_UPDATED, populatedAlert);
       }
+
+      // Emit DEVICE_UPDATED so openAlertCount updates live across the UI
+      const affectedDevice = await Device.findById(alert.device);
+      if (affectedDevice) {
+        const enrichedDevice = await enrichDeviceWithAlerts(affectedDevice);
+        getIO().emit(EVENTS.DEVICE_UPDATED, enrichedDevice);
+      }
     } catch (socketError) {
       console.error('Socket emit error (ALERT_UPDATED):', socketError);
     }
@@ -158,6 +167,13 @@ const addAlertNote = async (req, res, next) => {
         .populate('notes.author', 'name _id');
       if (populatedAlert) {
         getIO().emit(EVENTS.ALERT_UPDATED, populatedAlert);
+      }
+
+      // Emit DEVICE_UPDATED so openAlertCount updates live across the UI
+      const affectedDevice = await Device.findById(alert.device);
+      if (affectedDevice) {
+        const enrichedDevice = await enrichDeviceWithAlerts(affectedDevice);
+        getIO().emit(EVENTS.DEVICE_UPDATED, enrichedDevice);
       }
     } catch (socketError) {
       console.error('Socket emit error (ALERT_UPDATED):', socketError);

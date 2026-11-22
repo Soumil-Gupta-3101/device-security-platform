@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { getDeviceById, getRiskBreakdown, getDeviceEvents } from '../services/deviceService'
+import { getDeviceById, getRiskBreakdown, getDeviceEvents, updateDeviceStatus } from '../services/deviceService'
 import { getDeviceAlerts } from '../services/alertService'
 
 // Metadata map for human-friendly rule titles, descriptions, and default points
@@ -53,6 +53,34 @@ export default function DeviceDetailPage() {
   // UI helpers
   const [copiedField, setCopiedField] = useState(null)
   const [eventFilter, setEventFilter] = useState('ALL')
+
+  // Status Action & Modal state
+  const canManageStatus = user?.role === 'admin' || user?.role === 'analyst'
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const [statusActionLoading, setStatusActionLoading] = useState(false)
+  const [statusActionError, setStatusActionError] = useState(null)
+  const statusDropdownRef = useRef(null)
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    action: null,
+    reason: '',
+  })
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+    if (statusDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [statusDropdownOpen])
 
   // Fetch all device data in parallel
   const fetchAllData = useCallback(async () => {
@@ -143,6 +171,48 @@ export default function DeviceDetailPage() {
       console.warn('Risk breakdown refetch failed:', err)
     }
   }, [id])
+
+  // Status Action handlers
+  const handleSelectStatusOption = (action) => {
+    setStatusDropdownOpen(false)
+    setStatusActionError(null)
+
+    if (action === 'trusted') {
+      // "Mark as Trusted" can apply directly without modal
+      executeStatusUpdate('trusted')
+    } else {
+      // "Block Device" and "Reset to Automatic" require confirmation modal
+      setConfirmModal({
+        isOpen: true,
+        action,
+        reason: '',
+      })
+    }
+  }
+
+  const executeStatusUpdate = async (action, reason) => {
+    if (!id) return
+    setStatusActionLoading(true)
+    setStatusActionError(null)
+
+    try {
+      const updated = await updateDeviceStatus(id, action, reason)
+      if (updated) {
+        setDevice((prev) => ({ ...prev, ...updated }))
+        await refetchRiskBreakdown()
+      }
+      setConfirmModal({ isOpen: false, action: null, reason: '' })
+    } catch (err) {
+      console.error('Failed to update device status:', err)
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        'Failed to update device status'
+      setStatusActionError(message)
+    } finally {
+      setStatusActionLoading(false)
+    }
+  }
 
   // Live updates via socket
   useEffect(() => {
@@ -251,6 +321,12 @@ export default function DeviceDetailPage() {
           wrapper: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
           dot: 'bg-emerald-400',
           label: 'Trusted',
+        }
+      case 'normal':
+        return {
+          wrapper: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+          dot: 'bg-emerald-400',
+          label: 'Normal',
         }
       case 'unknown':
         return {
@@ -598,6 +674,24 @@ export default function DeviceDetailPage() {
           </div>
         )}
 
+        {/* Status Action Error banner */}
+        {statusActionError && !confirmModal.isOpen && (
+          <div className="p-4 rounded-xl bg-red-950/50 border border-red-500/50 text-red-300 flex items-center justify-between gap-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-xs font-mono font-medium">{statusActionError}</span>
+            </div>
+            <button
+              onClick={() => setStatusActionError(null)}
+              className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800/80 rounded text-xs font-mono text-white transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* ========================================================================= */}
         {/* 4. HEADER SECTION (REAL DATA)                                            */}
         {/* ========================================================================= */}
@@ -646,15 +740,120 @@ export default function DeviceDetailPage() {
                         <span className={`w-2 h-2 rounded-full ${statusInfo.dot}`}></span>
                         {statusInfo.label}
                       </span>
+
+                      {/* Small label when status was set manually (trusted or blocked) */}
+                      {(device?.status === 'trusted' || device?.status === 'blocked') && (
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-semibold bg-slate-950/80 text-slate-300 border border-slate-700/80 uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                          <svg className="w-3 h-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          <span>Set manually</span>
+                        </span>
+                      )}
+
+                      {device?.openAlertCount > 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-mono font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wider">
+                          <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></span>
+                          Needs attention
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Quick Action Button */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* Quick Action Button Group */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Device Status Action Menu (Admin & Analyst only) */}
+                  {canManageStatus && (
+                    <div className="relative" ref={statusDropdownRef}>
+                      <button
+                        onClick={() => setStatusDropdownOpen((prev) => !prev)}
+                        disabled={statusActionLoading}
+                        title="Change device status or reset to automatic scoring"
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-950 hover:bg-slate-900 border border-slate-700/80 hover:border-cyan-500/50 text-slate-200 transition-all font-mono text-xs cursor-pointer shadow-sm disabled:opacity-50"
+                      >
+                        {statusActionLoading ? (
+                          <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                          </svg>
+                        )}
+                        <span className="font-semibold">Device Status</span>
+                        <svg
+                          className={`w-3.5 h-3.5 text-slate-400 transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {statusDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-64 rounded-xl bg-[#0b1324] border border-slate-800 shadow-2xl z-50 py-1.5 font-mono text-xs overflow-hidden backdrop-blur-xl">
+                          <div className="px-3.5 py-2 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 font-bold bg-[#070e1c]">
+                            Status Management
+                          </div>
+
+                          {/* Option 1: Mark as Trusted (Applies directly) */}
+                          <button
+                            onClick={() => handleSelectStatusOption('trusted')}
+                            disabled={device?.status === 'trusted' || statusActionLoading}
+                            className="w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-800/70 text-slate-200 hover:text-emerald-400 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                              <span className="font-medium">Mark as Trusted</span>
+                            </div>
+                            {device?.status === 'trusted' && (
+                              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">(Current)</span>
+                            )}
+                          </button>
+
+                          {/* Option 2: Block Device (Confirmation required) */}
+                          <button
+                            onClick={() => handleSelectStatusOption('blocked')}
+                            disabled={device?.status === 'blocked' || statusActionLoading}
+                            className="w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-800/70 text-slate-200 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-2 h-2 rounded-full bg-red-400" />
+                              <span className="font-medium">Block Device</span>
+                            </div>
+                            {device?.status === 'blocked' && (
+                              <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">(Current)</span>
+                            )}
+                          </button>
+
+                          {/* Option 3: Reset to Automatic (Confirmation required) */}
+                          <div className="border-t border-slate-800/80 my-1" />
+                          <button
+                            onClick={() => handleSelectStatusOption('reset')}
+                            disabled={device?.status !== 'trusted' && device?.status !== 'blocked'}
+                            className="w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-800/70 text-slate-200 hover:text-cyan-400 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              <span className="font-medium">Reset to Automatic</span>
+                            </div>
+                            {device?.status !== 'trusted' && device?.status !== 'blocked' && (
+                              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">(Active)</span>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Refresh Telemetry Button */}
                   <button
                     onClick={fetchAllData}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition-colors font-mono text-xs cursor-pointer"
+                    disabled={loading}
+                    title="Refresh device telemetry"
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-colors font-mono text-xs cursor-pointer shadow-sm disabled:opacity-50"
                   >
                     <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -841,6 +1040,34 @@ export default function DeviceDetailPage() {
                           />
                         </div>
                       </div>
+
+                      {/* Open Alerts and Last Alert Info near Risk Score */}
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
+                        <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
+                          <div className="text-slate-400 uppercase text-[10px] tracking-wider">Open Alerts</div>
+                          <div className={`font-bold mt-0.5 ${device?.openAlertCount > 0 ? 'text-rose-400' : 'text-slate-200'}`}>
+                            {device?.openAlertCount ?? 0} active
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
+                          <div className="text-slate-400 uppercase text-[10px] tracking-wider">Most Recent Alert</div>
+                          <div className="text-slate-200 font-bold mt-0.5 truncate" title={device?.lastAlertAt ? formatDateTime(device.lastAlertAt) : 'None'}>
+                            {device?.lastAlertAt ? formatRelativeTime(device.lastAlertAt) : 'None'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* No recent activity note if lastSeen > 10 min */}
+                      {(!device?.lastSeen || (Date.now() - new Date(device.lastSeen).getTime()) > 10 * 60 * 1000) && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-amber-300 text-[11px] font-mono mt-2">
+                          <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <span>
+                            <strong>No recent activity:</strong> Last seen {formatRelativeTime(device?.lastSeen)}. A low score may reflect decayed activity rather than verified safe operations.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1117,6 +1344,103 @@ export default function DeviceDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Confirmation Dialog for Block Device / Reset to Automatic */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#0b1324] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative font-mono text-xs animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  confirmModal.action === 'blocked'
+                    ? 'bg-red-950/70 border border-red-500/40 text-red-400 shadow-inner shadow-red-950'
+                    : 'bg-cyan-950/70 border border-cyan-500/40 text-cyan-400 shadow-inner shadow-cyan-950'
+                }`}
+              >
+                {confirmModal.action === 'blocked' ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white uppercase tracking-tight">
+                  {confirmModal.action === 'blocked' ? 'Block Endpoint Device' : 'Reset Status to Automatic'}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Target: <span className="text-cyan-400 font-semibold">{device?.name || id}</span>
+                </p>
+              </div>
+            </div>
+
+            <p className="text-slate-300 leading-relaxed text-xs">
+              {confirmModal.action === 'blocked'
+                ? 'Manual blocking quarantines this endpoint. The automated risk engine will NOT change its status until an operator resets it.'
+                : 'Resetting to automatic clears the manual override. The system will derive the device status directly from its 24-hour event risk score.'}
+            </p>
+
+            {/* Optional Reason field stored in audit log */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-slate-400 uppercase tracking-wider block font-semibold">
+                Reason (Optional)
+              </label>
+              <input
+                type="text"
+                value={confirmModal.reason}
+                onChange={(e) => setConfirmModal((prev) => ({ ...prev, reason: e.target.value }))}
+                placeholder={confirmModal.action === 'blocked' ? 'e.g. Rogue hardware identified by secops...' : 'e.g. Investigation completed, restored to telemetry...'}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-slate-200 outline-none focus:border-cyan-500 transition-colors text-xs placeholder:text-slate-600 font-mono"
+              />
+              <span className="text-[10px] text-slate-500 block">
+                Recorded in immutable administrative audit logs.
+              </span>
+            </div>
+
+            {/* Inline Error Message inside modal if request fails */}
+            {statusActionError && (
+              <div className="p-3 rounded-lg bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{statusActionError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmModal({ isOpen: false, action: null, reason: '' })
+                  setStatusActionError(null)
+                }}
+                disabled={statusActionLoading}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeStatusUpdate(confirmModal.action, confirmModal.reason)}
+                disabled={statusActionLoading}
+                className={`px-4 py-2 rounded-lg font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                  confirmModal.action === 'blocked'
+                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-950/50'
+                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-950/50'
+                }`}
+              >
+                {statusActionLoading && (
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                )}
+                <span>{confirmModal.action === 'blocked' ? 'Block Device' : 'Reset to Automatic'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

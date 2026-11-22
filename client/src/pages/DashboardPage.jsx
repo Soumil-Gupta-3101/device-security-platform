@@ -202,10 +202,11 @@ export default function DashboardPage() {
     return `${Math.floor(diffInSeconds / 86400)}d ago`
   }
 
-  // Device status badge styling (green trusted, gray unknown, yellow suspicious, red blocked)
+  // Device status badge styling (green trusted/normal, gray unknown, yellow suspicious, red blocked)
   const getStatusBadge = (status) => {
     switch (status) {
       case 'trusted':
+      case 'normal':
         return 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
       case 'unknown':
         return 'bg-slate-500/15 text-slate-300 border border-slate-500/30'
@@ -668,6 +669,7 @@ export default function DashboardPage() {
                   >
                     <option value="all">All Statuses</option>
                     <option value="trusted">Trusted</option>
+                    <option value="normal">Normal</option>
                     <option value="unknown">Unknown</option>
                     <option value="suspicious">Suspicious</option>
                     <option value="blocked">Blocked</option>
@@ -806,15 +808,23 @@ export default function DashboardPage() {
                               </div>
                             </td>
 
-                            {/* Status Badge */}
+                            {/* Status Badge & Attention Flag */}
                             <td className="py-3.5 px-3">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider ${getStatusBadge(
-                                  device.status
-                                )}`}
-                              >
-                                {device.status || 'unknown'}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider ${getStatusBadge(
+                                    device.status
+                                  )}`}
+                                >
+                                  {device.status || 'unknown'}
+                                </span>
+                                {device.openAlertCount > 0 && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                                    Needs attention
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Risk Score */}

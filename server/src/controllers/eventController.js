@@ -1,7 +1,8 @@
 const Device = require('../models/Device');
 const DeviceEvent = require('../models/DeviceEvent');
 const Alert = require('../models/Alert');
-const { calculateRiskScore, getSeverityLabel } = require('../services/riskEngine');
+const { calculateRiskScore, getSeverityLabel, SUSPICIOUS_THRESHOLD } = require('../services/riskEngine');
+const { enrichDeviceWithAlerts } = require('../services/deviceAlertService');
 const { getIO, EVENTS } = require('../sockets');
 
 const SEVERITY_LEVELS = {
@@ -96,21 +97,18 @@ const ingestEvent = async (req, res, next) => {
     const severity = getSeverityLabel(newScore);
 
     const deviceUpdates = { riskScore: newScore };
-    if (severity === 'high' && device.status !== 'blocked') {
-      deviceUpdates.status = 'suspicious';
-      device.status = 'suspicious';
+    // Manual statuses ("trusted" and "blocked") are never auto-changed.
+    // Derived statuses ("unknown", "normal", "suspicious") are derived from the risk score.
+    if (device.status !== 'trusted' && device.status !== 'blocked') {
+      const derivedStatus = newScore >= SUSPICIOUS_THRESHOLD ? 'suspicious' : 'normal';
+      if (device.status !== derivedStatus) {
+        deviceUpdates.status = derivedStatus;
+        device.status = derivedStatus;
+      }
     }
     device.riskScore = newScore;
 
     const updatedDevice = await Device.findByIdAndUpdate(deviceId, deviceUpdates, { new: true });
-
-    try {
-      if (updatedDevice) {
-        getIO().emit(EVENTS.DEVICE_UPDATED, updatedDevice);
-      }
-    } catch (socketError) {
-      console.error('Socket emit error (DEVICE_UPDATED):', socketError);
-    }
 
     // Alert handling for medium and high severity
     if (severity === 'medium' || severity === 'high') {
@@ -151,6 +149,16 @@ const ingestEvent = async (req, res, next) => {
           console.error('Socket emit error (ALERT_UPDATED):', socketError);
         }
       }
+    }
+
+    // Emit DEVICE_UPDATED with fresh openAlertCount, lastAlertAt, and riskScore
+    try {
+      if (updatedDevice) {
+        const enrichedDevice = await enrichDeviceWithAlerts(updatedDevice);
+        getIO().emit(EVENTS.DEVICE_UPDATED, enrichedDevice);
+      }
+    } catch (socketError) {
+      console.error('Socket emit error (DEVICE_UPDATED):', socketError);
     }
 
     return res.status(201).json(event);

@@ -23,7 +23,7 @@ const deviceSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['trusted', 'unknown', 'suspicious', 'blocked'],
+        values: ['trusted', 'unknown', 'suspicious', 'blocked', 'normal'],
         message: '{VALUE} is not a valid device status'
       },
       default: 'unknown',

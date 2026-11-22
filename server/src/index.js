@@ -3,6 +3,7 @@ const http = require('http');
 const app = require('./app');
 const connectDB = require('./config/db');
 const { initSocket } = require('./sockets');
+const { startRiskDecayJob } = require('./services/riskDecayService');
 
 const PORT = process.env.PORT || 5000;
 
@@ -13,6 +14,9 @@ const startServer = async () => {
   try {
     // Connect to database before listening for requests
     await connectDB();
+
+    // Start background risk decay job
+    startRiskDecayJob();
 
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

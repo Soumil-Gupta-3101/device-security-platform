@@ -17,18 +17,21 @@ const getDashboardSummary = async (req, res, next) => {
       unknown,
       suspicious,
       blocked,
+      normal,
       openAlerts,
       low,
       medium,
       high,
-      riskResult
+      riskResult,
+      latestAlert
     ] = await Promise.all([
       Device.countDocuments(),
       Device.countDocuments({ status: 'trusted' }),
       Device.countDocuments({ status: 'unknown' }),
       Device.countDocuments({ status: 'suspicious' }),
       Device.countDocuments({ status: 'blocked' }),
-      Alert.countDocuments({ status: 'open' }),
+      Device.countDocuments({ status: 'normal' }),
+      Alert.countDocuments({ status: { $in: ['open', 'investigating'] } }),
       Alert.countDocuments({ status: 'open', severity: 'low' }),
       Alert.countDocuments({ status: 'open', severity: 'medium' }),
       Alert.countDocuments({ status: 'open', severity: 'high' }),
@@ -39,7 +42,8 @@ const getDashboardSummary = async (req, res, next) => {
             avgRiskScore: { $avg: '$riskScore' }
           }
         }
-      ])
+      ]),
+      Alert.findOne().sort({ createdAt: -1 }).select('createdAt')
     ]);
 
     const avgRiskScore =
@@ -53,9 +57,12 @@ const getDashboardSummary = async (req, res, next) => {
         trusted,
         unknown,
         suspicious,
-        blocked
+        blocked,
+        normal
       },
       openAlerts,
+      openAlertCount: openAlerts,
+      lastAlertAt: latestAlert ? latestAlert.createdAt : null,
       alertsBySeverity: {
         low,
         medium,

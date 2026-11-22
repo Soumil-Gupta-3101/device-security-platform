@@ -43,10 +43,27 @@ export const getRiskBreakdown = async (deviceId) => {
   return response.data
 }
 
+/**
+ * Updates a device's manual status or resets to automatic.
+ * @param {string} id - The ID of the device to update.
+ * @param {string} status - 'trusted', 'blocked', or 'reset'.
+ * @param {string} [reason] - Optional reason for audit log.
+ * @returns {Promise<any>} The updated device response.
+ */
+export const updateDeviceStatus = async (id, status, reason) => {
+  const payload = { status }
+  if (reason && typeof reason === 'string' && reason.trim()) {
+    payload.reason = reason.trim()
+  }
+  const response = await api.put(`/devices/${id}`, payload)
+  return response.data
+}
+
 export default {
   getDevices,
   getDeviceById,
   getDeviceEvents,
   getRiskBreakdown,
+  updateDeviceStatus,
 }
 

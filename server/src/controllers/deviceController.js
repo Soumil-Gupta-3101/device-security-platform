@@ -1,9 +1,11 @@
 const Device = require('../models/Device');
 const Alert = require('../models/Alert');
-const { calculateRiskScore } = require('../services/riskEngine');
+const { calculateRiskScore, SUSPICIOUS_THRESHOLD } = require('../services/riskEngine');
 const { logAudit } = require('../services/auditService');
+const { enrichDeviceWithAlerts, enrichDevicesWithAlerts } = require('../services/deviceAlertService');
+const { getIO, EVENTS } = require('../sockets');
 
-const VALID_STATUSES = ['trusted', 'unknown', 'suspicious', 'blocked'];
+const VALID_STATUSES = ['trusted', 'unknown', 'suspicious', 'blocked', 'normal'];
 const VALID_DEVICE_TYPES = ['laptop', 'mobile', 'iot', 'server'];
 
 /**
@@ -57,8 +59,10 @@ const getAllDevices = async (req, res, next) => {
         .limit(limitNum)
     ]);
 
+    const enrichedDevices = await enrichDevicesWithAlerts(devices);
+
     return res.status(200).json({
-      data: devices,
+      data: enrichedDevices,
       page: pageNum,
       limit: limitNum,
       total,
@@ -82,7 +86,8 @@ const getDeviceById = async (req, res, next) => {
       return res.status(404).json({ message: 'Device not found' });
     }
 
-    return res.status(200).json(device);
+    const enrichedDevice = await enrichDeviceWithAlerts(device);
+    return res.status(200).json(enrichedDevice);
   } catch (error) {
     next(error);
   }
@@ -95,29 +100,83 @@ const getDeviceById = async (req, res, next) => {
 const updateDevice = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, deviceType } = req.body || {};
+    const { status, deviceType, reason } = req.body || {};
 
-    if (status && !VALID_STATUSES.includes(status)) {
-      return res.status(400).json({ error: 'invalid status value' });
+    const existingDevice = await Device.findById(id);
+    if (!existingDevice) {
+      return res.status(404).json({ error: 'Device not found', message: 'Device not found' });
     }
 
-    if (deviceType && !VALID_DEVICE_TYPES.includes(deviceType)) {
-      return res.status(400).json({ error: 'invalid deviceType value' });
+    const updates = {};
+
+    if (deviceType !== undefined) {
+      if (!VALID_DEVICE_TYPES.includes(deviceType)) {
+        return res.status(400).json({ error: 'invalid deviceType value', message: 'Invalid deviceType value' });
+      }
+      updates.deviceType = deviceType;
     }
 
-    const device = await Device.findByIdAndUpdate(id, req.body, {
+    let statusChanged = false;
+    const oldStatus = existingDevice.status;
+    let newStatus = oldStatus;
+
+    if (status !== undefined) {
+      // Allowed values for manual status action: "trusted", "blocked", and reset action ("reset")
+      if (status === 'reset' || status === 'auto') {
+        const { score } = await calculateRiskScore(existingDevice._id);
+        // Derived value computed from the current score:
+        if (existingDevice.status === 'unknown' && !existingDevice.firstSeen && !existingDevice.lastSeen) {
+          newStatus = 'unknown';
+        } else {
+          newStatus = score >= SUSPICIOUS_THRESHOLD ? 'suspicious' : 'normal';
+        }
+        updates.status = newStatus;
+        if (newStatus !== oldStatus) {
+          statusChanged = true;
+        }
+      } else if (['trusted', 'blocked'].includes(status)) {
+        newStatus = status;
+        updates.status = newStatus;
+        if (newStatus !== oldStatus) {
+          statusChanged = true;
+        }
+      } else {
+        return res.status(400).json({
+          error: 'invalid status value',
+          message: 'Allowed status actions are: trusted, blocked, or reset'
+        });
+      }
+    }
+
+    const updatedDevice = await Device.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true
     });
 
-    if (!device) {
-      return res.status(404).json({ message: 'Device not found' });
+    const actingUserId = req.user?.id || req.user?._id;
+
+    if (statusChanged) {
+      const auditMeta = {
+        oldStatus,
+        newStatus
+      };
+      if (reason && typeof reason === 'string' && reason.trim()) {
+        auditMeta.reason = reason.trim();
+      }
+      await logAudit(actingUserId, 'device.status_changed', 'Device', updatedDevice._id, auditMeta);
+    } else {
+      await logAudit(actingUserId, 'device.updated', 'Device', updatedDevice._id);
     }
 
-    const actingUserId = req.user?.id || req.user?._id;
-    await logAudit(actingUserId, 'device.updated', 'Device', device._id);
+    const enrichedDevice = await enrichDeviceWithAlerts(updatedDevice);
 
-    return res.status(200).json(device);
+    try {
+      getIO().emit(EVENTS.DEVICE_UPDATED, enrichedDevice);
+    } catch (socketError) {
+      console.error('Socket emit error (DEVICE_UPDATED):', socketError);
+    }
+
+    return res.status(200).json(enrichedDevice);
   } catch (error) {
     next(error);
   }
