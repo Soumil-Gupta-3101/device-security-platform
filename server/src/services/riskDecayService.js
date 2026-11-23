@@ -1,5 +1,5 @@
 const Device = require('../models/Device');
-const { calculateRiskScore, SUSPICIOUS_THRESHOLD } = require('./riskEngine');
+const riskEngine = require('./riskEngine');
 const { enrichDeviceWithAlerts } = require('./deviceAlertService');
 const { getIO, EVENTS } = require('../sockets');
 
@@ -22,7 +22,7 @@ const recomputeAllDevicesRisk = async () => {
 
     for (const device of devices) {
       try {
-        const { score: newScore } = await calculateRiskScore(device._id);
+        const { score: newScore } = await riskEngine.calculateRiskScore(device._id);
         const updates = {};
         let hasChanges = false;
 
@@ -38,7 +38,7 @@ const recomputeAllDevicesRisk = async () => {
           if (device.status === 'unknown' && !device.firstSeen && !device.lastSeen) {
             // Stays unknown
           } else {
-            const derivedStatus = newScore >= SUSPICIOUS_THRESHOLD ? 'suspicious' : 'normal';
+            const derivedStatus = newScore >= riskEngine.SUSPICIOUS_THRESHOLD ? 'suspicious' : 'normal';
             if (device.status !== derivedStatus) {
               updates.status = derivedStatus;
               hasChanges = true;

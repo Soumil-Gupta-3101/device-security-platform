@@ -61,13 +61,22 @@ const initSocket = (httpServer) => {
 
 const getIO = () => {
   if (!io) {
-    throw new Error('Socket.io has not been initialized. Call initSocket(httpServer) first.');
+    return {
+      emit: () => {},
+      to: () => ({ emit: () => {} }),
+      in: () => ({ emit: () => {} }),
+    };
   }
   return io;
+};
+
+const setIO = (newIO) => {
+  io = newIO;
 };
 
 module.exports = {
   initSocket,
   getIO,
+  setIO,
   EVENTS,
 };
